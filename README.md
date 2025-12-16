@@ -1,38 +1,76 @@
-# 프로젝트 제목
+# 🚇 서울 지하철 혼잡도 대시보드
 
-이것은 예시 프로젝트입니다.
+서울교통공사의 지하철 혼잡도 정보를 시각화하는 Streamlit 기반 대시보드입니다.
 
 ## 소개
 
-이 프로젝트는 예시를 위해 생성되었습니다.
+이 프로젝트는 서울 지하철 1~8호선의 시간대별/역별/방향별 혼잡도 데이터를 분석하고 시각화합니다.
+요일, 호선, 역, 방향, 시간대 등 다양한 필터를 통해 혼잡도 패턴을 탐색할 수 있습니다.
 
-## 설치 방법
+## 문서
 
-```bash
-# 저장소 클론
-git clone <repository-url>
+- **구현 계획**: [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 
-# 디렉토리 이동
-cd rice-1
+## 프로젝트 구조
+
+```
+rice-1/
+├── app.py                 # 메인 엔트리포인트
+├── pages/                 # 멀티페이지용 (페이즈 4에서 구현)
+├── src/                   # 데이터 로딩/집계 모듈
+│   ├── __init__.py
+│   ├── data_loader.py     # 데이터 로딩/정제 (페이즈 1)
+│   └── aggregations.py    # KPI/집계 함수 (페이즈 2)
+├── data/                  # CSV 데이터 저장
+│   └── 서울교통공사_지하철혼잡도정보_20250930.csv
+├── requirements.txt       # 의존성 패키지
+├── README.md
+└── IMPLEMENTATION_PLAN.md # 구현 계획 (페이즈 단위)
 ```
 
-## 사용 방법
+## 설치 및 실행 방법
 
-프로젝트 사용 방법을 여기에 작성하세요.
+### 1. 의존성 설치
 
-## 기여 방법
+```bash
+pip install -r requirements.txt
+```
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+필요한 패키지:
+- `streamlit` >= 1.28.0
+- `pandas` >= 2.0.0
+- `altair` >= 5.0.0
 
-## 라이선스
+### 2. 앱 실행
 
-MIT License
+```bash
+streamlit run app.py
+```
 
-## 연락처
+실행 후 브라우저에서 자동으로 `http://localhost:8501` 이 열립니다.
 
-프로젝트 관리자 - your-email@example.com
+## 개발 로드맵
+
+- ✅ **페이즈 0**: 프로젝트 뼈대 구축 완료
+- ⏳ **페이즈 1**: 데이터 로딩/정제 모듈 구현 예정
+- 📅 **페이즈 2**: KPI/집계 함수 구축
+- 📅 **페이즈 3**: MVP (개요 페이지) 구현
+- 📅 **페이즈 4**: 멀티페이지 확장
+- 📅 **페이즈 5**: 품질/해석/UX 보강
+- 📅 **페이즈 6**: 배포/운영
+
+자세한 내용은 [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) 참조
+
+## 데이터 출처
+
+- **데이터명**: 서울교통공사 지하철 혼잡도 정보
+- **기준일**: 2025년 9월 30일
+- **포함 내용**: 1~8호선, 30분 단위 혼잡도 (05:30~00:30)
+
+## 기술 스택
+
+- **프레임워크**: Streamlit
+- **데이터 처리**: Pandas
+- **시각화**: Altair
+- **언어**: Python 3.8+
 
