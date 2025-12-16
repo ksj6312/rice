@@ -1,181 +1,303 @@
 """
-서울 지하철 혼잡도 대시보드
-메인 엔트리포인트
+서울 지하철 혼잡도 대시보드 - 페이즈 3 MVP
 """
 
 import streamlit as st
 import pandas as pd
-from src.data_loader import load_data, to_long_format, get_csv_info
+import altair as alt
+from src.data_loader import load_data, to_long_format
+from src.aggregations import (
+    compute_kpis, 
+    apply_filters,
+    top_n_stations,
+    TIME_PERIODS
+)
 
+# ============================================================================
 # 페이지 설정
+# ============================================================================
 st.set_page_config(
     page_title="서울 지하철 혼잡도 대시보드",
     page_icon="🚇",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# 타이틀
-st.title("🚇 서울 지하철 혼잡도 대시보드")
-
+# ============================================================================
 # 데이터 로딩
+# ============================================================================
+@st.cache_data
+def load_all_data():
+    """데이터 로딩 및 변환"""
+    df_wide = load_data()
+    df_long = to_long_format(df_wide)
+    return df_long
+
 try:
-    with st.spinner("데이터 로딩 중..."):
-        # Wide 포맷 로딩
-        df_wide = load_data()
-        
-        # Long 포맷 변환
-        df_long = to_long_format(df_wide)
-        
-        # 파일 정보
-        file_info = get_csv_info()
-    
-    # 성공 메시지
-    st.success("✅ 데이터 로딩 완료!")
-    
-    # 데이터 요약
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("총 레코드 수", f"{len(df_long):,}")
-    
-    with col2:
-        st.metric("역 수", df_long['역명'].nunique())
-    
-    with col3:
-        st.metric("호선 수", df_long['호선'].nunique())
-    
-    with col4:
-        st.metric("시간대 수", df_long['시간'].nunique())
-    
-    # 페이즈 1 완료 안내
-    st.info("""
-    ✅ **페이즈 1 완료**: 데이터 로딩 및 정제 모듈 구현 완료
-    - CSV 인코딩 처리 (CP949) ✓
-    - 컬럼 표준화 ✓
-    - Wide → Long 포맷 변환 ✓
-    - Streamlit 캐싱 적용 ✓
-    
-    **다음 단계 (페이즈 2)**: KPI/집계 함수 구축
-    """)
-
-    # 데이터 미리보기
-    with st.expander("📊 데이터 미리보기 (Long 포맷)"):
-        st.dataframe(df_long.head(20), width='stretch')
-        
-        st.subheader("컬럼 정보")
-        col_info = pd.DataFrame({
-            '컬럼명': df_long.columns,
-            '타입': df_long.dtypes.values,
-            'Null 개수': df_long.isnull().sum().values,
-            '고유값 개수': [df_long[col].nunique() for col in df_long.columns]
-        })
-        st.dataframe(col_info, width='stretch')
-    
-    # 파일 정보
-    with st.expander("📁 파일 정보"):
-        if file_info:
-            st.write(f"**파일명**: {file_info.get('file_name', 'N/A')}")
-            st.write(f"**파일 크기**: {file_info.get('file_size_mb', 0)} MB")
-            st.write(f"**경로**: {file_info.get('file_path', 'N/A')}")
-    
-    # 프로젝트 구조 안내
-    with st.expander("🗂️ 프로젝트 구조"):
-        st.code("""
-rice-1/
-├── app.py                 # 메인 엔트리포인트 (현재 파일)
-├── pages/                 # 멀티페이지용 (페이즈 4)
-├── src/                   # 데이터 로딩/집계 모듈
-│   ├── data_loader.py     # 데이터 로딩/정제 ✅
-│   └── aggregations.py    # KPI/집계 함수 (페이즈 2)
-├── data/                  # CSV 데이터 저장
-│   └── 서울교통공사_지하철혼잡도정보_20250930.csv
-└── requirements.txt       # 의존성 패키지
-        """, language="text")
-
-except FileNotFoundError as e:
-    st.error(f"❌ 파일을 찾을 수 없습니다: {e}")
+    with st.spinner("🚇 데이터 로딩 중..."):
+        df_long = load_all_data()
 except Exception as e:
-    st.error(f"❌ 데이터 로딩 중 오류 발생: {e}")
-    st.exception(e)
+    st.error(f"❌ 데이터 로딩 실패: {e}")
+    st.stop()
 
-import pandas as pd
-from src.aggregations import (
-    compute_kpis, 
-    aggregate_for_line, 
-    aggregate_for_heatmap,
-    top_n_stations,
-    compare_by_weekday,
-    compare_by_direction,
-    get_congestion_stats
+# ============================================================================
+# 사이드바 필터
+# ============================================================================
+st.sidebar.header("🔍 필터")
+
+# 요일 선택
+요일_옵션 = sorted(df_long['요일'].unique().tolist())
+선택_요일 = st.sidebar.multiselect(
+    "📅 요일",
+    options=요일_옵션,
+    default=요일_옵션,
+    help="분석할 요일을 선택하세요"
 )
 
-st.divider()
+# 호선 선택
+호선_옵션 = sorted(df_long['호선'].unique().tolist())
+선택_호선 = st.sidebar.multiselect(
+    "🚇 호선",
+    options=호선_옵션,
+    default=호선_옵션,
+    help="분석할 호선을 선택하세요"
+)
+
+# 역 검색 (선택 사항)
+역_옵션 = ['전체'] + sorted(df_long['역명'].unique().tolist())
+선택_역 = st.sidebar.selectbox(
+    "🏢 역 검색",
+    options=역_옵션,
+    help="특정 역을 선택하거나 전체를 선택하세요"
+)
+
+# 방향 선택
+방향_옵션 = sorted(df_long['방향'].unique().tolist())
+선택_방향 = st.sidebar.multiselect(
+    "↔️ 방향",
+    options=방향_옵션,
+    default=방향_옵션,
+    help="상행/하행 또는 내선/외선 선택"
+)
+
+# 시간대 선택
+시간대_옵션 = ['전체'] + list(TIME_PERIODS.keys())
+선택_시간대 = st.sidebar.selectbox(
+    "⏰ 시간대",
+    options=시간대_옵션,
+    help="출근/점심/퇴근/심야 시간대 선택"
+)
+
+# 필터 딕셔너리 구성
+filters = {}
+if 선택_요일:
+    filters['요일'] = 선택_요일
+if 선택_호선:
+    filters['호선'] = 선택_호선
+if 선택_역 != '전체':
+    filters['역명'] = [선택_역]
+if 선택_방향:
+    filters['방향'] = 선택_방향
+if 선택_시간대 != '전체':
+    filters['시간대'] = 선택_시간대
+
+# 필터 적용
+df_filtered = apply_filters(df_long, filters)
+
+# 사이드바 하단 정보
+st.sidebar.divider()
+st.sidebar.caption(f"📊 필터링된 데이터: **{len(df_filtered):,}** 건")
+st.sidebar.caption(f"📊 전체 데이터: **{len(df_long):,}** 건")
 
 # ============================================================================
-# 페이즈 2 검증: KPI/집계 함수 테스트
+# 메인 헤더
 # ============================================================================
-st.subheader("🧪 페이즈 2 검증: KPI/집계 함수 테스트")
+st.title("🚇 서울 지하철 혼잡도 대시보드")
+st.caption("서울교통공사 지하철 혼잡도 실시간 분석 (2025년 9월 기준)")
 
-with st.expander("📊 KPI 계산 테스트", expanded=True):
-    st.write("**전체 데이터 KPI:**")
-    kpis = compute_kpis(df_long, {})
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("최대 혼잡도", f"{kpis['peak_congestion']}%")
-    with col2:
-        st.metric("피크 시간", kpis['peak_time'])
-    with col3:
-        st.metric("평균 혼잡도", f"{kpis['avg_congestion']}%")
-    with col4:
-        st.metric("레코드 수", f"{kpis['total_records']:,}")
+# ============================================================================
+# KPI 카드 영역
+# ============================================================================
+kpis = compute_kpis(df_long, filters)
 
-with st.expander("🚇 호선별 집계"):
-    line_agg = aggregate_for_line(df_long)
-    st.dataframe(line_agg, hide_index=True, width='stretch')
-
-with st.expander("🏆 혼잡한 역 TOP 10"):
-    top_stations = top_n_stations(df_long, n=10, by='max')
-    st.dataframe(top_stations, hide_index=True, width='stretch')
-
-with st.expander("📅 요일별 비교 (평일 vs 주말)"):
-    weekday_compare = compare_by_weekday(df_long)
-    st.dataframe(weekday_compare, hide_index=True, width='stretch')
-
-with st.expander("↔️ 방향별 비교"):
-    direction_compare = compare_by_direction(df_long)
-    st.dataframe(direction_compare, hide_index=True, width='stretch')
-
-with st.expander("📈 혼잡도 분포 통계"):
-    stats = get_congestion_stats(df_long)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("평균", f"{stats['mean']}%")
-        st.metric("최소값", f"{stats['min']}%")
-    with col2:
-        st.metric("표준편차", f"{stats['std']}%")
-        st.metric("1사분위", f"{stats['q25']}%")
-    with col3:
-        st.metric("중앙값", f"{stats['q50']}%")
-        st.metric("3사분위", f"{stats['q75']}%")
-    with col4:
-        st.metric("최대값", f"{stats['max']}%")
-
-st.divider()
-
-# 개발 로드맵
-st.subheader("📋 개발 로드맵")
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.success("✅ **페이즈 0**: 프로젝트 뼈대")
-    st.caption("폴더 구조, requirements.txt")
+    st.metric(
+        label="🔥 피크 혼잡도",
+        value=f"{kpis['peak_congestion']}%",
+        help="선택된 조건에서 가장 높은 혼잡도"
+    )
 
 with col2:
-    st.success("✅ **페이즈 1**: 데이터 로딩/정제")
-    st.caption("CSV 로딩, Long 포맷 변환")
+    st.metric(
+        label="📊 평균 혼잡도",
+        value=f"{kpis['avg_congestion']}%",
+        help="선택된 조건의 평균 혼잡도"
+    )
 
 with col3:
-    st.success("✅ **페이즈 2**: KPI/집계")
-    st.caption("피크 혼잡도, TOP-N 역")
+    st.metric(
+        label="⏰ 피크 시간",
+        value=kpis['peak_time'],
+        help="혼잡도가 가장 높은 시간대"
+    )
+
+with col4:
+    st.metric(
+        label="📋 분석 건수",
+        value=f"{kpis['total_records']:,}",
+        help="필터링된 데이터 레코드 수"
+    )
+
+st.divider()
+
+# ============================================================================
+# 시각화 영역
+# ============================================================================
+
+# 차트 1: 시간대별 혼잡도 라인차트
+st.subheader("📈 시간대별 혼잡도 추이")
+
+if len(df_filtered) > 0:
+    # 시간대별 평균 혼잡도 집계
+    time_agg = df_filtered.groupby('시간', as_index=False)['혼잡도'].mean()
+    time_agg['혼잡도'] = time_agg['혼잡도'].round(1)
+    
+    # Altair 라인차트
+    line_chart = alt.Chart(time_agg).mark_line(
+        point=alt.OverlayMarkDef(size=60, filled=True),
+        strokeWidth=3,
+        color='#FF6B6B'
+    ).encode(
+        x=alt.X('시간:O', 
+                title='시간대',
+                axis=alt.Axis(labelAngle=-45, labelFontSize=10)),
+        y=alt.Y('혼잡도:Q', 
+                title='평균 혼잡도 (%)',
+                scale=alt.Scale(domain=[0, 100])),
+        tooltip=[
+            alt.Tooltip('시간:O', title='시간'),
+            alt.Tooltip('혼잡도:Q', title='혼잡도 (%)', format='.1f')
+        ]
+    ).properties(
+        height=400
+    )
+    
+    # 피크 시간 강조
+    peak_data = time_agg[time_agg['시간'] == kpis['peak_time']]
+    if len(peak_data) > 0:
+        peak_point = alt.Chart(peak_data).mark_point(
+            size=300,
+            color='#FF4444',
+            filled=True,
+            opacity=0.8
+        ).encode(
+            x='시간:O',
+            y='혼잡도:Q',
+            tooltip=[
+                alt.Tooltip('시간:O', title='⭐ 피크 시간'),
+                alt.Tooltip('혼잡도:Q', title='혼잡도 (%)', format='.1f')
+            ]
+        )
+        
+        final_chart = (line_chart + peak_point).configure_axis(
+            labelFontSize=11,
+            titleFontSize=13
+        ).configure_view(
+            strokeWidth=0
+        )
+    else:
+        final_chart = line_chart.configure_axis(
+            labelFontSize=11,
+            titleFontSize=13
+        ).configure_view(
+            strokeWidth=0
+        )
+    
+    st.altair_chart(final_chart, use_container_width=True)
+    
+    # 시간대별 통계 요약
+    with st.expander("📊 시간대별 상세 데이터"):
+        st.dataframe(
+            time_agg.sort_values('혼잡도', ascending=False),
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "시간": st.column_config.TextColumn("시간대", width="medium"),
+                "혼잡도": st.column_config.NumberColumn("혼잡도 (%)", format="%.1f")
+            }
+        )
+else:
+    st.warning("⚠️ 선택한 필터 조건에 해당하는 데이터가 없습니다.")
+
+st.divider()
+
+# 차트 2: TOP 10 혼잡 역 막대차트
+st.subheader("🏆 가장 혼잡한 역 TOP 10")
+
+if len(df_filtered) > 0:
+    # TOP 10 역 추출
+    top_stations_df = top_n_stations(df_filtered, n=10, by='max')
+    
+    if len(top_stations_df) > 0:
+        # Altair 막대차트
+        bar_chart = alt.Chart(top_stations_df).mark_bar(
+            cornerRadiusTopRight=8,
+            cornerRadiusTopLeft=8
+        ).encode(
+            x=alt.X('혼잡도:Q', 
+                    title='최대 혼잡도 (%)',
+                    scale=alt.Scale(domain=[0, 100])),
+            y=alt.Y('역명:N', 
+                    title='역명',
+                    sort='-x',
+                    axis=alt.Axis(labelFontSize=12)),
+            color=alt.Color('호선:N', 
+                           title='호선',
+                           scale=alt.Scale(scheme='tableau10')),
+            tooltip=[
+                alt.Tooltip('순위:Q', title='순위'),
+                alt.Tooltip('역명:N', title='역명'),
+                alt.Tooltip('호선:N', title='호선'),
+                alt.Tooltip('혼잡도:Q', title='최대 혼잡도 (%)', format='.1f')
+            ]
+        ).properties(
+            height=450
+        ).configure_axis(
+            labelFontSize=11,
+            titleFontSize=13
+        ).configure_legend(
+            titleFontSize=12,
+            labelFontSize=11
+        ).configure_view(
+            strokeWidth=0
+        )
+        
+        st.altair_chart(bar_chart, use_container_width=True)
+        
+        # TOP 10 테이블
+        with st.expander("📋 TOP 10 상세 정보"):
+            st.dataframe(
+                top_stations_df,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "순위": st.column_config.NumberColumn("순위", width="small"),
+                    "역명": st.column_config.TextColumn("역명", width="medium"),
+                    "호선": st.column_config.TextColumn("호선", width="small"),
+                    "혼잡도": st.column_config.NumberColumn("최대 혼잡도 (%)", format="%.1f")
+                }
+            )
+    else:
+        st.info("데이터가 충분하지 않습니다.")
+else:
+    st.warning("⚠️ 선택한 필터 조건에 해당하는 데이터가 없습니다.")
+
+st.divider()
+
+# ============================================================================
+# 푸터
+# ============================================================================
+st.caption("💡 **사용 팁**: 왼쪽 사이드바에서 요일, 호선, 역, 방향, 시간대를 선택하여 데이터를 필터링할 수 있습니다.")
+st.caption("📌 **데이터 출처**: 서울교통공사 지하철 혼잡도 정보 (2025년 9월 30일 기준)")
