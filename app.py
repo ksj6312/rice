@@ -99,6 +99,68 @@ except Exception as e:
     st.exception(e)
 
 import pandas as pd
+from src.aggregations import (
+    compute_kpis, 
+    aggregate_for_line, 
+    aggregate_for_heatmap,
+    top_n_stations,
+    compare_by_weekday,
+    compare_by_direction,
+    get_congestion_stats
+)
+
+st.divider()
+
+# ============================================================================
+# 페이즈 2 검증: KPI/집계 함수 테스트
+# ============================================================================
+st.subheader("🧪 페이즈 2 검증: KPI/집계 함수 테스트")
+
+with st.expander("📊 KPI 계산 테스트", expanded=True):
+    st.write("**전체 데이터 KPI:**")
+    kpis = compute_kpis(df_long, {})
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("최대 혼잡도", f"{kpis['peak_congestion']}%")
+    with col2:
+        st.metric("피크 시간", kpis['peak_time'])
+    with col3:
+        st.metric("평균 혼잡도", f"{kpis['avg_congestion']}%")
+    with col4:
+        st.metric("레코드 수", f"{kpis['total_records']:,}")
+
+with st.expander("🚇 호선별 집계"):
+    line_agg = aggregate_for_line(df_long)
+    st.dataframe(line_agg, hide_index=True, width='stretch')
+
+with st.expander("🏆 혼잡한 역 TOP 10"):
+    top_stations = top_n_stations(df_long, n=10, by='max')
+    st.dataframe(top_stations, hide_index=True, width='stretch')
+
+with st.expander("📅 요일별 비교 (평일 vs 주말)"):
+    weekday_compare = compare_by_weekday(df_long)
+    st.dataframe(weekday_compare, hide_index=True, width='stretch')
+
+with st.expander("↔️ 방향별 비교"):
+    direction_compare = compare_by_direction(df_long)
+    st.dataframe(direction_compare, hide_index=True, width='stretch')
+
+with st.expander("📈 혼잡도 분포 통계"):
+    stats = get_congestion_stats(df_long)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("평균", f"{stats['mean']}%")
+        st.metric("최소값", f"{stats['min']}%")
+    with col2:
+        st.metric("표준편차", f"{stats['std']}%")
+        st.metric("1사분위", f"{stats['q25']}%")
+    with col3:
+        st.metric("중앙값", f"{stats['q50']}%")
+        st.metric("3사분위", f"{stats['q75']}%")
+    with col4:
+        st.metric("최대값", f"{stats['max']}%")
 
 st.divider()
 
@@ -115,5 +177,5 @@ with col2:
     st.caption("CSV 로딩, Long 포맷 변환")
 
 with col3:
-    st.warning("⏳ **페이즈 2**: KPI/집계")
+    st.success("✅ **페이즈 2**: KPI/집계")
     st.caption("피크 혼잡도, TOP-N 역")

@@ -7,41 +7,52 @@
 
 ---
 
-### 페이즈 0) 프로젝트 뼈대 결정 (0.5일)
+### ✅ 페이즈 0) 프로젝트 뼈대 결정 (0.5일) - 완료
 - 결정사항
-  - 실행/배포: 로컬 또는 Streamlit Community Cloud
-  - 파이썬/라이브러리: `pandas`, 시각화(`altair` 또는 `plotly`), `pyarrow`(옵션)
-  - 데이터 갱신 방식: (A) 리포에 CSV 포함 (B) 앱 업로드 (C) 폴더 스캔
+  - 실행/배포: 로컬 실행
+  - 파이썬/라이브러리: `pandas`, 시각화(`altair`), `streamlit`
+  - 데이터 갱신 방식: (A) 리포에 CSV 포함
 - 산출물
-  - 폴더 구조: `app.py`, `pages/`, `src/`, `data/`
-  - `requirements.txt` 초안
+  - ✅ 폴더 구조: `app.py`, `pages/`, `src/`, `data/`
+  - ✅ `requirements.txt` 작성 완료
 
 ---
 
-### 페이즈 1) 데이터 로딩/정제 모듈 (0.5~1일)
+### ✅ 페이즈 1) 데이터 로딩/정제 모듈 (0.5~1일) - 완료
 - 작업
-  - CSV 인코딩 처리(깨짐 방지: CP949 가능성 고려)
-  - 컬럼 표준화: 요일/호선/역번호/역명/방향
-  - 혼잡도 값 파싱(공백 제거, 숫자 변환)
+  - ✅ CSV 인코딩 처리(CP949 인코딩 자동 처리, UTF-8 폴백)
+  - ✅ 컬럼 표준화: 요일/호선/역번호/역명/방향
+  - ✅ 혼잡도 값 파싱(공백 제거, 숫자 변환)
 - 핵심 변환
-  - 시간 컬럼(05:30~00:30)을 long 포맷으로 변환
-  - 목표 스키마: `요일,호선,역번호,역명,방향,시간,혼잡도`
+  - ✅ 시간 컬럼(05:30~00:30)을 long 포맷으로 변환
+  - ✅ 목표 스키마: `요일,호선,역번호,역명,방향,시간,혼잡도`
+  - ✅ Wide(1,671 × 44) → Long(65,169 × 7) 변환 완료
 - Streamlit
-  - `@st.cache_data`로 로딩/변환 캐싱
+  - ✅ `@st.cache_data`로 로딩/변환 캐싱 적용
 - 산출물
-  - `load_data()`, `to_long_format()` 함수
+  - ✅ `load_data()`, `to_long_format()`, `get_csv_info()` 함수 구현
+  - ✅ `app.py`에 데이터 로딩 및 미리보기 기능 추가
 
 ---
 
-### 페이즈 2) KPI/집계 함수 구축 (0.5~1일)
+### ✅ 페이즈 2) KPI/집계 함수 구축 (0.5~1일) - 완료
 - 지표(예시)
-  - 피크 혼잡도 / 피크 시간
-  - 시간대 평균(출근/퇴근/심야 등)
-  - TOP-N(역/호선)
-  - 방향(상/하 또는 내/외선) 비교
+  - ✅ 피크 혼잡도 / 피크 시간
+  - ✅ 시간대 평균(출근/점심/퇴근/심야 등)
+  - ✅ TOP-N(역/호선)
+  - ✅ 방향(상/하 또는 내/외선) 비교
+  - ✅ 요일별 비교 (평일 vs 주말)
+  - ✅ 혼잡도 분포 통계
 - 산출물
-  - `compute_kpis(df_long, filters)`
-  - `aggregate_for_line()`, `aggregate_for_heatmap()`, `top_n_stations()` 등 순수 함수
+  - ✅ `compute_kpis(df_long, filters)` - KPI 계산
+  - ✅ `aggregate_for_line()` - 호선별 집계
+  - ✅ `aggregate_for_heatmap()` - 히트맵용 집계
+  - ✅ `top_n_stations()` - TOP N 역 추출
+  - ✅ `compare_by_weekday()` - 요일별 비교
+  - ✅ `compare_by_direction()` - 방향별 비교
+  - ✅ `get_congestion_stats()` - 혼잡도 분포 통계
+  - ✅ `apply_filters()` - 공통 필터 함수
+  - ✅ TIME_PERIODS 상수 정의 (출근/점심/퇴근/심야)
 
 ---
 
